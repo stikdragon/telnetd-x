@@ -1,0 +1,12 @@
+<ivy-module version="2.0">
+	<info organisation="uk.co.stikman" module="telnetd-x" />
+
+	<publications>
+		<artifact name="telnetd-x" ext="jar" type="jar" />
+	</publications>
+
+	<dependencies>
+		<dependency org="commons-logging" name="commons-logging" rev="1.2" />
+		<dependency org="log4j" name="log4j" rev="1.2.17" />
+	</dependencies>
+</ivy-module>

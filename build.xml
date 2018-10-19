@@ -1,0 +1,38 @@
+<project default="jar" xmlns:ivy="antlib:org.apache.ivy.ant">
+
+	<property name="version" value="0.1" />	
+
+	<target name="clean">
+		<delete dir="build" />
+	</target>
+
+	<path id="cp">
+		<fileset dir="lib">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<target name="compile" depends="clean">
+		<mkdir dir="build/classes" />
+		<javac srcdir="src" destdir="build/classes" includeantruntime="false">
+			<classpath refid="cp" />
+		</javac>
+	</target>
+
+	<target name="resolve" description="retrieve dependencies with ivy">
+		<ivy:retrieve pattern="lib/ivy/[artifact](-[classifier])-[revision].[ext]" />
+	</target>
+	
+
+	<target name="jar" depends="compile">
+		<mkdir dir="build/jar" />
+
+		<jar destfile="build/jar/telnetd-x-${version}.jar">
+			<fileset dir="build/classes" />
+			<fileset dir="src">
+				<include name="**/*.java" />
+			</fileset>
+		</jar>
+	</target>
+
+</project>
