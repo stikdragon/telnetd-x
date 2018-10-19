@@ -32,17 +32,24 @@
 
 package net.wimpi.telnetd.io;
 
-import net.wimpi.telnetd.net.Connection;
-import net.wimpi.telnetd.net.ConnectionData;
-import net.wimpi.telnetd.net.ConnectionEvent;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PushbackInputStream;
+import java.net.InetAddress;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.net.InetAddress;
+import net.wimpi.telnetd.net.Connection;
+import net.wimpi.telnetd.net.ConnectionData;
+import net.wimpi.telnetd.net.ConnectionEvent;
 
 /**
  * Class that represents the TelnetIO implementation. It contains an inner
@@ -72,21 +79,63 @@ import java.net.InetAddress;
  */
 public class TelnetIO {
 
-	private static Log			log		= LogFactory.getLog(TelnetIO.class);
+	private class IACInputStream extends FilterInputStream {
 
-	private Connection			connection;								//a reference to the connection this instance works for
-	private ConnectionData		connectionData;							//holds all important information of the connection
-	private DataOutputStream	out;										//the byte oriented outputstream
-	private DataInputStream		in;										//the byte oriented input stream
+		protected IACInputStream(InputStream in) {
+			super(in);
+		}
+
+		@Override
+		public int read() throws IOException {
+			int c = super.read();
+
+			while (c == 255) {
+				c = super.read();
+				if (c != 255) {
+					iacHandler.handleC(c);
+					c = super.read();
+				} else {
+					break;
+				}
+			}
+			return stripCRSeq(c);
+		}
+
+		@Override
+		public int read(byte[] buffer, int off, int len) throws IOException {
+			// TODO: more sane implementation of this
+			int cnt = 0;
+			while (len > 0) {
+				if (cnt > 0 && available() == 0)
+					return cnt;
+				int n = (byte) read();
+				if (n == -1)
+					throw new IOException("End of Stream");
+				buffer[off++] = (byte) n;
+				++cnt;
+				--len;
+			}
+			return cnt;
+		}
+
+	}
+
+	private static Log			log			= LogFactory.getLog(TelnetIO.class);
+
+	private Connection			connection;										//a reference to the connection this instance works for
+	private ConnectionData		connectionData;									//holds all important information of the connection
+	private DataOutputStream	out;											//the byte oriented outputstream
+	private IACInputStream		in;
 
 	//Aggregations
-	private IACHandler			iacHandler;								//holds a reference to the aggregated IACHandler
+	private IACHandler			iacHandler;										//holds a reference to the aggregated IACHandler
 
 	//Members
-	private InetAddress			localAddress;								//address of the host the telnetd is running on
-	private boolean				noIAC	= false;							//describes if IAC was found and if its just processed
+	private InetAddress			localAddress;									//address of the host the telnetd is running on
 
 	private boolean				crFlag;
+
+	private Charset				encoding	= StandardCharsets.UTF_8;
 
 	/**
 	 * Creates a TelnetIO object for the given connection.<br>
@@ -100,8 +149,9 @@ public class TelnetIO {
 		//we make an instance of our inner class
 		iacHandler = new IACHandler();
 		//we setup underlying byte oriented streams
-		in = new DataInputStream(connectionData.getSocket().getInputStream());
+		//		in = new DataInputStream(connectionData.getSocket().getInputStream());
 		out = new DataOutputStream(new BufferedOutputStream(connectionData.getSocket().getOutputStream()));
+		in = new IACInputStream(connectionData.getSocket().getInputStream());
 
 		//we save the local address (necessary?)
 		localAddress = connectionData.getSocket().getLocalAddress();
@@ -122,6 +172,9 @@ public class TelnetIO {
 	/**
 	 * Method to output a byte. Ensures that CR(\r) is never send alone,but
 	 * CRLF(\r\n), which is a rule of the telnet protocol.
+	 * <p>
+	 * Note that this is safe for UTF-8 encodings, because multibyte sequences
+	 * are only ever bytes >= 0x7f
 	 *
 	 * @param b
 	 *            Byte to be written.
@@ -194,7 +247,7 @@ public class TelnetIO {
 	 *            char to be written.
 	 */
 	public void write(char ch) throws IOException {
-		write((byte) ch);
+		write(Character.toString(ch).getBytes(encoding));
 	}//write(char)
 
 	/**
@@ -204,7 +257,7 @@ public class TelnetIO {
 	 *            String to be written.
 	 */
 	public void write(String str) throws IOException {
-		write(str.getBytes());
+		write(str.getBytes(encoding));
 	}//write(String)
 
 	/**
@@ -252,6 +305,14 @@ public class TelnetIO {
 		//}
 	}//rawWrite
 
+	public Charset getEncoding() {
+		return encoding;
+	}
+
+	public void setEncoding(Charset encoding) {
+		this.encoding = encoding;
+	}
+
 	/****
 	 * End implementation of OutputStream
 	 ***********************************************/
@@ -267,23 +328,9 @@ public class TelnetIO {
 	 * @return int read from stream.
 	 */
 	public int read() throws IOException {
-		int c = rawread();
-		//if (c == 255) {
-		noIAC = false;
-		while ((c == 255) && (!noIAC)) {
-			/**
-			 * Read next, and invoke the IACHandler he is taking care of the
-			 * rest. Or at least he should :)
-			 */
-			c = rawread();
-			if (c != 255) {
-				iacHandler.handleC(c);
-				c = rawread();
-			} else {
-				noIAC = true;
-			}
-		}
-		return stripCRSeq(c);
+		int n = in.read();
+		
+		return n;
 	}//read
 
 	/**
@@ -304,10 +351,15 @@ public class TelnetIO {
 	 * getting the NAWS Data Values for height and width.
 	 */
 	private int read16int() throws IOException {
+		int ch1 = in.read();
+		int ch2 = in.read();
+		if ((ch1 | ch2) < 0)
+			throw new EOFException();
+		return (ch1 << 8) + (ch2 << 0);
 
 		//try {
-		int c = in.readUnsignedShort();
-		return c;
+		//		int c = in.readUnsignedShort();
+		//		return c;
 		/*} catch (EOFException e) {
 		  if (m_Connection.isActive()) {
 		m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
@@ -331,12 +383,12 @@ public class TelnetIO {
 	 * @return int read from stream.
 	 */
 	private int rawread() throws IOException {
-		int b = 0;
-
-		//try {
-		b = in.readUnsignedByte();
+		int b = in.read();
+		if (b < 0)
+			throw new EOFException();
 		connectionData.activity();
 		return b;
+
 		/*
 		} catch (EOFException e) {
 		//this means the stream came to an end we can let the

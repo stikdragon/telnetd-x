@@ -44,6 +44,11 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Class for Terminal specific I/O. It represents the layer between the
@@ -57,19 +62,20 @@ import java.io.IOException;
  */
 public class TerminalIO implements BasicTerminalIO {
 
-	private static Log		log	= LogFactory.getLog(TerminalIO.class);
-	private TelnetIO		telnetIO;									//low level I/O
+	private static Log			log	= LogFactory.getLog(TerminalIO.class);
+	private TelnetIO			telnetIO;									//low level I/O
+	private TelnetInputStream	telnetInputStream;
 
-	private Connection		connection;								//the connection this instance is working for
-	private ConnectionData	connectionData;							//holds data of the connection
-	private Terminal		terminal;									//active terminal object
-	private ReentrantLock	writeLock;
-	private Mutex			readLock;
+	private Connection			connection;									//the connection this instance is working for
+	private ConnectionData		connectionData;								//holds data of the connection
+	private Terminal			terminal;									//active terminal object
+	private ReentrantLock		writeLock;
+	private Mutex				readLock;
 	//Members
-	private boolean			acousticSignalling;						//flag for accoustic signalling
-	private boolean			autoflush;								//flag for autoflushing mode
-	private boolean			forceBold;								//flag for forcing bold output
-	private boolean			lineWrapping;
+	private boolean				acousticSignalling;							//flag for accoustic signalling
+	private boolean				autoflush;									//flag for autoflushing mode
+	private boolean				forceBold;									//flag for forcing bold output
+	private boolean				lineWrapping;
 
 	/**
 	 * Constructor of the TerminalIO class.
@@ -88,8 +94,10 @@ public class TerminalIO implements BasicTerminalIO {
 		try {
 			//create a new telnet io
 			telnetIO = new TelnetIO();
+			telnetInputStream = new TelnetInputStream(telnetIO);
 			telnetIO.setConnection(con);
 			telnetIO.initIO();
+
 		} catch (Exception ex) {
 			//handle, at least log
 		}
@@ -121,17 +129,19 @@ public class TerminalIO implements BasicTerminalIO {
 	public int read() throws IOException {
 		try {
 			readLock.acquire();
-			int i = telnetIO.read();
+
+			int i = telnetInputStream.readChar();
+
 			//translate possible control sequences
-			i = terminal.translateControlCharacter(i);
+			int cc = terminal.translateControlCharacter(i);
 
 			//catch & fire a logoutrequest event
-			if (i == LOGOUTREQUEST) {
+			if (cc == LOGOUTREQUEST) {
 				connection.processConnectionEvent(new ConnectionEvent(connection, ConnectionEvent.CONNECTION_LOGOUTREQUEST));
-				i = HANDLED;
-			} else if (i > 256 && i == ESCAPE) {
+				cc = HANDLED;
+			} else if (cc == ESCAPE) {
 				//translate an incoming escape sequence
-				i = handleEscapeSequence(i);
+				i = handleEscapeSequence(cc);
 			}
 
 			//return i holding a char or a defined special key
@@ -459,7 +469,7 @@ public class TerminalIO implements BasicTerminalIO {
 			//fill atomic length
 			//FIXME: ensure CAN, broken Escapes etc.
 			for (int m = 0; m < bytebuf.length; m++) {
-				bytebuf[m] = telnetIO.read();
+				bytebuf[m] = telnetInputStream.read();
 			}
 			return terminal.translateEscapeSequence(bytebuf);
 		}
@@ -593,42 +603,44 @@ public class TerminalIO implements BasicTerminalIO {
 
 	/**
 	 * Terminal independent representation constants for terminal functions.
+	 * Have remapped these so that they fit into the Unicode BMP private use
+	 * area range (U+E000 to U+F8FF)
 	 */
 	public static final int[]	HOME			= { 0, 0 };
 
 	public static final int		IOERROR			= -1;													//IO error
 	public static final int																				// Positioning 10xx
-								UP				= 1001;													//one up
-	public static final int		DOWN			= 1002;													//one down
-	public static final int		RIGHT			= 1003;													//one left
-	public static final int		LEFT			= 1004;													//one right
+								UP				= 0xe001;												//one up
+	public static final int		DOWN			= 0xe002;												//one down
+	public static final int		RIGHT			= 0xe003;												//one left
+	public static final int		LEFT			= 0xe004;												//one right
 	//HOME=1005,      //Home cursor pos(0,0)
 
 	public static final int																				// Functions 105x
-								STORECURSOR		= 1051;													//store cursor position + attributes
-	public static final int		RESTORECURSOR	= 1052;													//restore cursor + attributes
+								STORECURSOR		= 0xe051;												//store cursor position + attributes
+	public static final int		RESTORECURSOR	= 0xe052;												//restore cursor + attributes
 
 	public static final int																				// Erasing 11xx
-								EEOL			= 1100;													//erase to end of line
-	public static final int		EBOL			= 1101;													//erase to beginning of line
-	public static final int		EEL				= 1103;													//erase entire line
-	public static final int		EEOS			= 1104;													//erase to end of screen
-	public static final int		EBOS			= 1105;													//erase to beginning of screen
-	public static final int		EES				= 1106;													//erase entire screen
+								EEOL			= 0xe100;												//erase to end of line
+	public static final int		EBOL			= 0xe101;												//erase to beginning of line
+	public static final int		EEL				= 0xe103;												//erase entire line
+	public static final int		EEOS			= 0xe104;												//erase to end of screen
+	public static final int		EBOS			= 0xe105;												//erase to beginning of screen
+	public static final int		EES				= 0xe106;												//erase entire screen
 
 	public static final int																				// Escape Sequence-ing 12xx
-								ESCAPE			= 1200;													//Escape
-	public static final int		BYTEMISSING		= 1201;													//another byte needed
-	public static final int		UNRECOGNIZED	= 1202;													//escape match missed
+								ESCAPE			= 0xe200;												//Escape
+	public static final int		BYTEMISSING		= 0xe201;												//another byte needed
+	public static final int		UNRECOGNIZED	= 0xe202;												//escape match missed
 
 	public static final int																				// Control Characters 13xx
-								ENTER			= 1300;													//LF is ENTER at the moment
-	public static final int		TABULATOR		= 1301;													//Tabulator
-	public static final int		DELETE			= 1302;													//Delete
-	public static final int		BACKSPACE		= 1303;													//BACKSPACE
-	public static final int		COLORINIT		= 1304;													//Color inited
-	public static final int		HANDLED			= 1305;
-	public static final int		LOGOUTREQUEST	= 1306;													//CTRL-D beim login
+								ENTER			= 0xe300;												//LF is ENTER at the moment
+	public static final int		TABULATOR		= 0xe301;												//Tabulator
+	public static final int		DELETE			= 0xe302;												//Delete
+	public static final int		BACKSPACE		= 0xe303;												//BACKSPACE
+	public static final int		COLORINIT		= 0xe304;												//Color inited
+	public static final int		HANDLED			= 0xe305;
+	public static final int		LOGOUTREQUEST	= 0xe306;												//CTRL-D beim login
 
 	/**
 	 * Internal UpdateType Constants

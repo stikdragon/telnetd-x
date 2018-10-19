@@ -61,11 +61,15 @@ public class ConnectionData {
 	private long					lastActivity;						//timestamp for the last activity
 	private boolean					warned;								//warned flag
 	private String					negotiatedTerminalType;				//negotiated TerminalType as String
-	private int[]					terminalGeometry;					//negotiated terminal geometry
+	private TerminalGeometry		terminalGeometry;					//negotiated terminal geometry
 	private boolean					terminalGeometryChanged	= true;		//flag for changes in the terminal geometry
 	private String					loginShell;							//the login shell
 	private boolean					lineMode				= false;
 	private String					echoMode				= "server";
+
+	public String getEchoMode() {
+		return echoMode;
+	}
 
 	/**
 	 * Constructs a ConnectionData instance storing vital information about a
@@ -83,9 +87,7 @@ public class ConnectionData {
 		setLocale();
 		port = sock.getPort();
 		//this will set a default geometry and terminal type for the terminal
-		terminalGeometry = new int[2];
-		terminalGeometry[0] = 80; //width
-		terminalGeometry[1] = 25; //height
+		terminalGeometry = new TerminalGeometry(80, 25);
 		negotiatedTerminalType = "default";
 		environment = new HashMap<>(20);
 		//this will stamp the first activity for validity :)
@@ -239,8 +241,7 @@ public class ConnectionData {
 	 *            of the terminal in rows.
 	 */
 	public void setTerminalGeometry(int width, int height) {
-		terminalGeometry[0] = width;
-		terminalGeometry[1] = height;
+		terminalGeometry = new TerminalGeometry(width, height);
 		terminalGeometryChanged = true;
 	}//setTerminalGeometry
 
@@ -254,7 +255,7 @@ public class ConnectionData {
 	 *
 	 * @return integer array containing width and height.
 	 */
-	public int[] getTerminalGeometry() {
+	public TerminalGeometry getTerminalGeometry() {
 		//we toggle the flag because the change should now be known
 		if (terminalGeometryChanged)
 			terminalGeometryChanged = false;
@@ -267,7 +268,7 @@ public class ConnectionData {
 	 * @return the number of columns.
 	 */
 	public int getTerminalColumns() {
-		return terminalGeometry[0];
+		return terminalGeometry.getWidth();
 	}//getTerminalColumns
 
 	/**
@@ -276,7 +277,7 @@ public class ConnectionData {
 	 * @return the number of rows.
 	 */
 	public int getTerminalRows() {
-		return terminalGeometry[1];
+		return terminalGeometry.getHeight();
 	}//getTerminalRows
 
 	/**
