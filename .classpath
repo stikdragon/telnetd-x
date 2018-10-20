@@ -6,5 +6,6 @@
 	<classpathentry kind="con" path="org.maven.ide.eclipse.MAVEN2_CLASSPATH_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/ivy/commons-logging-1.2.jar"/>
 	<classpathentry kind="lib" path="lib/ivy/log4j-1.2.17.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
