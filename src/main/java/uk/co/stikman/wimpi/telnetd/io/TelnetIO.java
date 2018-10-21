@@ -149,7 +149,7 @@ public class TelnetIO {
 		iacHandler = new IACHandler();
 		//we setup underlying byte oriented streams
 		//		in = new DataInputStream(connectionData.getSocket().getInputStream());
-		out = new DataOutputStream(new LogOutputStream(new BufferedOutputStream(connectionData.getSocket().getOutputStream())));
+		out = new DataOutputStream(new BufferedOutputStream(connectionData.getSocket().getOutputStream()));
 		in = new IACInputStream(connectionData.getSocket().getInputStream());
 
 		//we save the local address (necessary?)
