@@ -3,12 +3,13 @@ package uk.co.stikman.telnetd.standalone;
 import java.io.IOException;
 
 import uk.co.stikman.wimpi.telnetd.io.BasicTerminalIO;
+import uk.co.stikman.wimpi.telnetd.io.Color;
 import uk.co.stikman.wimpi.telnetd.net.Connection;
 import uk.co.stikman.wimpi.telnetd.net.ConnectionData;
 import uk.co.stikman.wimpi.telnetd.net.ConnectionEvent;
 import uk.co.stikman.wimpi.telnetd.shell.Shell;
 
-public class MyShell implements Shell {
+public class EchoShell implements Shell {
 
 	private BasicTerminalIO	io;
 	private Connection		conn;
@@ -22,6 +23,7 @@ public class MyShell implements Shell {
 		try {
 
 			ConnectionData cd = conn.getConnectionData();
+			io.setAutoflushing(false);
 			io.write("               getHostName = " + cd.getHostName() + "\n");
 			io.write("            getHostAddress = " + cd.getHostAddress() + "\n");
 			io.write("                   getPort = " + cd.getPort() + "\n");
@@ -35,10 +37,19 @@ public class MyShell implements Shell {
 			io.write("               getLineMode = " + cd.isLineMode() + "\n");
 			io.write("               getEchoMode = " + cd.getEchoMode() + "\n");
 			io.write("  UTF8 symbol: ♥\n");
-			io.write("\n");
+			io.setBold(true);
+			io.write(" This is BOLD\n");
+			io.setBold(true);
+			io.setUnderlined(true);
+			io.write(" This is UNDERLINED and BOLD\n");
+			io.setBackgroundColor(Color.BRIGHT_MAGENTA);
+			io.setForegroundColor(Color.GREEN);
+			io.write(" This is GREEN, on HOT PINK\n");
+			io.flush();
 			for (;;) {
 				int i = io.read();
 				io.write(safeChar((char) i) + " (0x" + Integer.toHexString(i) + ")\n");
+				io.flush();
 				if (i == 'q')
 					break;
 			}
@@ -46,6 +57,7 @@ public class MyShell implements Shell {
 			conn.close();
 			throw new RuntimeException(e);
 		}
+		conn.close();
 	}
 
 	private char safeChar(char ch) {
@@ -96,8 +108,8 @@ public class MyShell implements Shell {
 		}
 	}
 
-	public static MyShell createShell() {
-		return new MyShell();
+	public static EchoShell createShell() {
+		return new EchoShell();
 	}
 
 }

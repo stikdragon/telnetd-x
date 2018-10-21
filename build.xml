@@ -1,6 +1,6 @@
 <project default="jar" xmlns:ivy="antlib:org.apache.ivy.ant">
 
-	<property name="version" value="0.1" />	
+	<property name="version" value="0.2" />	
 
 	<target name="clean">
 		<delete dir="build" />
@@ -9,14 +9,14 @@
 	</target>
 
 	<path id="cp">
-		<fileset dir="lib">
+		<fileset dir="lib/ivy">
 			<include name="**/*.jar" />
 		</fileset>
 	</path>
 
-	<target name="compile" depends="clean">
+	<target name="compile" depends="resolve">
 		<mkdir dir="build/classes" />
-		<javac srcdir="src" destdir="build/classes" includeantruntime="false">
+		<javac srcdir="src" destdir="build/classes" includeantruntime="false" encoding="UTF-8">
 			<classpath refid="cp" />
 		</javac>
 	</target>
@@ -26,7 +26,7 @@
 	</target>
 	
 
-	<target name="jar" depends="compile">
+	<target name="jar" depends="compile,resolve">
 		<mkdir dir="build/jar" />
 
 		<jar destfile="build/jar/telnetd-x-${version}.jar">

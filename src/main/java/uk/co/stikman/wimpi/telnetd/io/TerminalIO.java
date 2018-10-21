@@ -367,6 +367,7 @@ public class TerminalIO implements BasicTerminalIO {
 		}
 	}//defineScrollRegion
 
+	@Override
 	public synchronized void setForegroundColor(int color) throws IOException {
 		if (terminal.supportsSGR()) {
 			telnetIO.write(terminal.getGRSequence(FCOLOR, color));
@@ -376,9 +377,19 @@ public class TerminalIO implements BasicTerminalIO {
 		}
 	}//setForegroundColor
 
+	@Override
+	public void setForegroundColor(Color col) throws IOException {
+		setForegroundColor(col.asForeground());
+	}
+
+	@Override
+	public void setBackgroundColor(Color col) throws IOException {
+		setBackgroundColor(col.asBackground() - 10);
+	}
+
 	public synchronized void setBackgroundColor(int color) throws IOException {
 		if (terminal.supportsSGR()) {
-			//this method adds the offset to the fg color by itself
+			//this method adds the offset to the fg color by itself // why???
 			telnetIO.write(terminal.getGRSequence(BCOLOR, color + 10));
 			if (autoflush) {
 				flush();

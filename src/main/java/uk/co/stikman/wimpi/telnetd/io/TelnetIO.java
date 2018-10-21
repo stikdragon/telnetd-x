@@ -48,6 +48,7 @@ import org.apache.commons.logging.LogFactory;
 import uk.co.stikman.wimpi.telnetd.net.Connection;
 import uk.co.stikman.wimpi.telnetd.net.ConnectionData;
 import uk.co.stikman.wimpi.telnetd.net.ConnectionEvent;
+import uk.co.stikman.wimpi.telnetd.util.LogOutputStream;
 
 /**
  * Class that represents the TelnetIO implementation. It contains an inner
@@ -148,7 +149,7 @@ public class TelnetIO {
 		iacHandler = new IACHandler();
 		//we setup underlying byte oriented streams
 		//		in = new DataInputStream(connectionData.getSocket().getInputStream());
-		out = new DataOutputStream(new BufferedOutputStream(connectionData.getSocket().getOutputStream()));
+		out = new DataOutputStream(new LogOutputStream(new BufferedOutputStream(connectionData.getSocket().getOutputStream())));
 		in = new IACInputStream(connectionData.getSocket().getInputStream());
 
 		//we save the local address (necessary?)
@@ -327,7 +328,7 @@ public class TelnetIO {
 	 */
 	public int read() throws IOException {
 		int n = in.read();
-		
+
 		return n;
 	}//read
 
@@ -358,20 +359,14 @@ public class TelnetIO {
 		//try {
 		//		int c = in.readUnsignedShort();
 		//		return c;
-		/*} catch (EOFException e) {
-		  if (m_Connection.isActive()) {
-		m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
-		  }
-		  //for the sanity of the compiler we return something
-		  return -2;
-		} catch (IOException e) {
-		  if (m_Connection.isActive()) {
-		m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
-		  }
-		  //for the sanity of the compiler we return something
-		  return -1;
-		}
-		*/
+		/*
+		 * } catch (EOFException e) { if (m_Connection.isActive()) {
+		 * m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
+		 * } //for the sanity of the compiler we return something return -2; }
+		 * catch (IOException e) { if (m_Connection.isActive()) {
+		 * m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
+		 * } //for the sanity of the compiler we return something return -1; }
+		 */
 	}//read16int
 
 	/**
@@ -388,29 +383,23 @@ public class TelnetIO {
 		return b;
 
 		/*
-		} catch (EOFException e) {
-		//this means the stream came to an end we can let the
-		//ConnectionManager do his job.
-		if (m_Connection.isActive()) {
-		  //log.debug("Registering broken connection " + m_Connection.toString() + " active=" + m_Connection.isActive());
-		  m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
-		}
-		//for the sanity of the compiler we return something
-		return -1;
-		  } catch (IOException e) {
-		//this also means that the stream is buggy or something
-		//going wrong. By definition we react the same as in above case
-		if (!m_Initializing && m_Connection.isActive()) {
-		  //log.debug("Registering broken connection " +
-		  //    m_Connection.toString() + " active=" + m_Connection.isActive() +
-		  //    " initializing=" + m_Initializing);
-		
-		  m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
-		}
-		//for the sanity of the compiler we return something
-		return -1;
-		  }
-		  */
+		 * } catch (EOFException e) { //this means the stream came to an end we
+		 * can let the //ConnectionManager do his job. if
+		 * (m_Connection.isActive()) {
+		 * //log.debug("Registering broken connection " +
+		 * m_Connection.toString() + " active=" + m_Connection.isActive());
+		 * m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
+		 * } //for the sanity of the compiler we return something return -1; }
+		 * catch (IOException e) { //this also means that the stream is buggy or
+		 * something //going wrong. By definition we react the same as in above
+		 * case if (!m_Initializing && m_Connection.isActive()) {
+		 * //log.debug("Registering broken connection " + //
+		 * m_Connection.toString() + " active=" + m_Connection.isActive() + //
+		 * " initializing=" + m_Initializing);
+		 * 
+		 * m_ConnectionData.getManager().registerBrokenConnection(m_Connection);
+		 * } //for the sanity of the compiler we return something return -1; }
+		 */
 	}//rawread
 
 	/**
@@ -676,24 +665,24 @@ public class TelnetIO {
 		 */
 		private boolean parseTWO(int[] buf) {
 			switch (buf[0]) {
-			case IAC:
-				//doubled IAC to escape 255 is handled within the
-				//read method.
-				break;
-			case AYT:
-				IamHere();
-				break;
-			case AO:
-			case IP:
-			case EL:
-			case EC:
-			case NOP:
-				break;
-			case BRK:
-				nvtBreak();
-				break;
-			default:
-				return false;
+				case IAC:
+					//doubled IAC to escape 255 is handled within the
+					//read method.
+					break;
+				case AYT:
+					IamHere();
+					break;
+				case AO:
+				case IP:
+				case EL:
+				case EC:
+				case NOP:
+					break;
+				case BRK:
+					nvtBreak();
+					break;
+				default:
+					return false;
 			}
 			return true;
 		}//parseTWO
@@ -706,89 +695,89 @@ public class TelnetIO {
 		 */
 		private void parse(int[] buf) throws IOException {
 			switch (buf[0]) {
-			/* First switch on the Negotiation Option */
-			case WILL:
-				if (supported(buf[1]) && isEnabled(buf[1])) {
-					;// do nothing
-				} else {
+				/* First switch on the Negotiation Option */
+				case WILL:
+					if (supported(buf[1]) && isEnabled(buf[1])) {
+						;// do nothing
+					} else {
+						if (waitDOreply(buf[1]) && supported(buf[1])) {
+							enable(buf[1]);
+							setWait(DO, buf[1], false);
+						} else {
+							if (supported(buf[1])) {
+								sendCommand(DO, buf[1], false);
+								enable(buf[1]);
+							} else {
+								sendCommand(DONT, buf[1], false);
+							}
+						}
+					}
+					break;
+				case WONT:
 					if (waitDOreply(buf[1]) && supported(buf[1])) {
-						enable(buf[1]);
 						setWait(DO, buf[1], false);
 					} else {
-						if (supported(buf[1])) {
-							sendCommand(DO, buf[1], false);
+						if (supported(buf[1]) && isEnabled(buf[1])) {
+							// eanable() Method disables an Option that is already enabled
 							enable(buf[1]);
-						} else {
-							sendCommand(DONT, buf[1], false);
 						}
 					}
-				}
-				break;
-			case WONT:
-				if (waitDOreply(buf[1]) && supported(buf[1])) {
-					setWait(DO, buf[1], false);
-				} else {
+					break;
+				case DO:
 					if (supported(buf[1]) && isEnabled(buf[1])) {
-						// eanable() Method disables an Option that is already enabled
-						enable(buf[1]);
+						; // do nothing
+					} else {
+						if (waitWILLreply(buf[1]) && supported(buf[1])) {
+							enable(buf[1]);
+							setWait(WILL, buf[1], false);
+						} else {
+							if (supported(buf[1])) {
+								sendCommand(WILL, buf[1], false);
+								enable(buf[1]);
+							} else {
+								sendCommand(WONT, buf[1], false);
+							}
+						}
 					}
-				}
-				break;
-			case DO:
-				if (supported(buf[1]) && isEnabled(buf[1])) {
-					; // do nothing
-				} else {
+					break;
+				case DONT:
 					if (waitWILLreply(buf[1]) && supported(buf[1])) {
-						enable(buf[1]);
 						setWait(WILL, buf[1], false);
 					} else {
-						if (supported(buf[1])) {
-							sendCommand(WILL, buf[1], false);
+						if (supported(buf[1]) && isEnabled(buf[1])) {
+							// enable() Method disables an Option that is already enabled
 							enable(buf[1]);
-						} else {
-							sendCommand(WONT, buf[1], false);
 						}
 					}
-				}
-				break;
-			case DONT:
-				if (waitWILLreply(buf[1]) && supported(buf[1])) {
-					setWait(WILL, buf[1], false);
-				} else {
-					if (supported(buf[1]) && isEnabled(buf[1])) {
-						// enable() Method disables an Option that is already enabled
-						enable(buf[1]);
-					}
-				}
-				break;
+					break;
 
-			/* Now about other two byte IACs */
-			case DM: //How do I implement a SYNCH signal?
-				break;
-			case SB: //handle subnegotiations
-				if ((supported(buf[1])) && (isEnabled(buf[1]))) {
-					switch (buf[1]) {
-					case NAWS:
-						handleNAWS();
-						break;
-					case TTYPE:
-						handleTTYPE();
-						break;
-					case LINEMODE:
-						handleLINEMODE();
-						break;
-					case NEWENV:
-						handleNEWENV();
-						break;
-					default:
-						;
+				/* Now about other two byte IACs */
+				case DM: //How do I implement a SYNCH signal?
+					break;
+				case SB: //handle subnegotiations
+					if ((supported(buf[1])) && (isEnabled(buf[1]))) {
+						switch (buf[1]) {
+							case NAWS:
+								handleNAWS();
+								break;
+							case TTYPE:
+								handleTTYPE();
+								break;
+							case LINEMODE:
+								handleLINEMODE();
+								break;
+							case NEWENV:
+								handleNEWENV();
+								break;
+							default:
+								;
+						}
+					} else {
+						//do nothing
 					}
-				} else {
-					//do nothing
-				}
-				break;
-			default:
-				;
+					break;
+				default:
+					;
 			}//switch
 		}//parse
 
@@ -830,19 +819,19 @@ public class TelnetIO {
 		public void handleLINEMODE() throws IOException {
 			int c = rawread();
 			switch (c) {
-			case LM_MODE:
-				handleLMMode();
-				break;
-			case LM_SLC:
-				handleLMSLC();
-				break;
-			case WONT:
-			case WILL:
-				handleLMForwardMask(c);
-				break;
-			default:
-				//skip to (including) SE
-				skipToSE();
+				case LM_MODE:
+					handleLMMode();
+					break;
+				case LM_SLC:
+					handleLMSLC();
+					break;
+				case WONT:
+				case WILL:
+					handleLMForwardMask(c);
+					break;
+				default:
+					//skip to (including) SE
+					skipToSE();
 			}
 		}//handleLINEMODE
 
@@ -906,11 +895,11 @@ public class TelnetIO {
 
 		public void handleLMForwardMask(int WHAT) throws IOException {
 			switch (WHAT) {
-			case WONT:
-				if (WAIT_LM_DO_REPLY_FORWARDMASK) {
-					WAIT_LM_DO_REPLY_FORWARDMASK = false;
-				}
-				break;
+				case WONT:
+					if (WAIT_LM_DO_REPLY_FORWARDMASK) {
+						WAIT_LM_DO_REPLY_FORWARDMASK = false;
+					}
+					break;
 			}
 			skipToSE();
 		}//handleLMForward
@@ -919,25 +908,24 @@ public class TelnetIO {
 			log.debug("handleNEWENV()");
 			int c = rawread();
 			switch (c) {
-			case IS:
-				handleNEIs();
-				break;
-			case NE_INFO:
-				handleNEInfo();
-				break;
-			default:
-				//skip to (including) SE
-				skipToSE();
+				case IS:
+					handleNEIs();
+					break;
+				case NE_INFO:
+					handleNEInfo();
+					break;
+				default:
+					//skip to (including) SE
+					skipToSE();
 			}
 		}//handleNEWENV
 
 		/*
-		  The characters following a "type" up to the next "type" or VALUE specify the
-		  variable name.
-		
-		  If a "type" is not followed by a VALUE
-		  (e.g., by another VAR, USERVAR, or IAC SE) then that variable is
-		  undefined.
+		 * The characters following a "type" up to the next "type" or VALUE
+		 * specify the variable name.
+		 * 
+		 * If a "type" is not followed by a VALUE (e.g., by another VAR,
+		 * USERVAR, or IAC SE) then that variable is undefined.
 		 */
 		private int readNEVariableName(StringBuffer sbuf) throws IOException {
 			log.debug("readNEVariableName()");
@@ -981,14 +969,11 @@ public class TelnetIO {
 		}//readNEVariableName
 
 		/*
-		  The characters following a VALUE up to the next
-		  "type" specify the value of the variable.
-		  If a VALUE is immediately
-		  followed by a "type" or IAC, then the variable is defined, but has
-		  no value.
-		  If an IAC is contained between the IS and the IAC SE,
-		  it must be sent as IAC IAC.
-		*/
+		 * The characters following a VALUE up to the next "type" specify the
+		 * value of the variable. If a VALUE is immediately followed by a "type"
+		 * or IAC, then the variable is defined, but has no value. If an IAC is
+		 * contained between the IS and the IAC SE, it must be sent as IAC IAC.
+		 */
 		private int readNEVariableValue(StringBuffer sbuf) throws IOException {
 			log.debug("readNEVariableValue()");
 			//check conditions for first character after VALUE
@@ -1071,37 +1056,37 @@ public class TelnetIO {
 			if (i == NE_VAR || i == NE_USERVAR) {
 				do {
 					switch (readNEVariableName(sbuf)) {
-					case NE_IN_ERROR:
-						log.debug("readNEVariables()::NE_IN_ERROR");
-						return;
-					case NE_IN_END:
-						log.debug("readNEVariables()::NE_IN_END");
-						return;
-					case NE_VAR_DEFINED:
-						log.debug("readNEVariables()::NE_VAR_DEFINED");
-						String str = sbuf.toString();
-						sbuf.delete(0, sbuf.length());
-						switch (readNEVariableValue(sbuf)) {
 						case NE_IN_ERROR:
 							log.debug("readNEVariables()::NE_IN_ERROR");
 							return;
 						case NE_IN_END:
 							log.debug("readNEVariables()::NE_IN_END");
 							return;
-						case NE_VAR_DEFINED_EMPTY:
-							log.debug("readNEVariables()::NE_VAR_DEFINED_EMPTY");
-							break;
-						case NE_VAR_OK:
-							//add variable
-							log.debug("readNEVariables()::NE_VAR_OK:VAR=" + str + " VAL=" + sbuf.toString());
-							TelnetIO.this.connectionData.getEnvironment().put(str, sbuf.toString());
+						case NE_VAR_DEFINED:
+							log.debug("readNEVariables()::NE_VAR_DEFINED");
+							String str = sbuf.toString();
 							sbuf.delete(0, sbuf.length());
+							switch (readNEVariableValue(sbuf)) {
+								case NE_IN_ERROR:
+									log.debug("readNEVariables()::NE_IN_ERROR");
+									return;
+								case NE_IN_END:
+									log.debug("readNEVariables()::NE_IN_END");
+									return;
+								case NE_VAR_DEFINED_EMPTY:
+									log.debug("readNEVariables()::NE_VAR_DEFINED_EMPTY");
+									break;
+								case NE_VAR_OK:
+									//add variable
+									log.debug("readNEVariables()::NE_VAR_OK:VAR=" + str + " VAL=" + sbuf.toString());
+									TelnetIO.this.connectionData.getEnvironment().put(str, sbuf.toString());
+									sbuf.delete(0, sbuf.length());
+									break;
+							}
 							break;
-						}
-						break;
-					case NE_VAR_UNDEFINED:
-						log.debug("readNEVariables()::NE_VAR_UNDEFINED");
-						break;
+						case NE_VAR_UNDEFINED:
+							log.debug("readNEVariables()::NE_VAR_UNDEFINED");
+							break;
 					}
 				} while (cont);
 			}
@@ -1222,15 +1207,15 @@ public class TelnetIO {
 				int i;
 				i = rawread();
 				switch (i) {
-				case IAC:
-					i = rawread();
-					if (i == SE) {
-						cont = false;
-					}
-					break;
-				case -1:
-					return (new String("default"));
-				default:
+					case IAC:
+						i = rawread();
+						if (i == SE) {
+							cont = false;
+						}
+						break;
+					case -1:
+						return (new String("default"));
+					default:
 				}
 				if (cont) {
 					b = (char) i;
@@ -1256,16 +1241,16 @@ public class TelnetIO {
 		 */
 		private boolean supported(int i) {
 			switch (i) {
-			case SUPGA:
-			case ECHO:
-			case NAWS:
-			case TTYPE:
-			case NEWENV:
-				return true;
-			case LINEMODE:
-				return connectionData.isLineMode();
-			default:
-				return false;
+				case SUPGA:
+				case ECHO:
+				case NAWS:
+				case TTYPE:
+				case NEWENV:
+					return true;
+				case LINEMODE:
+					return connectionData.isLineMode();
+				default:
+					return false;
 			}
 		}//supported
 
@@ -1300,53 +1285,53 @@ public class TelnetIO {
 		 */
 		private void enable(int i) throws IOException {
 			switch (i) {
-			case SUPGA:
-				if (DO_SUPGA) {
-					DO_SUPGA = false;
-				} else {
-					DO_SUPGA = true;
-				}
-				break;
-			case ECHO:
-				if (DO_ECHO) {
-					DO_ECHO = false;
-				} else {
-					DO_ECHO = true;
-				}
-				break;
-			case NAWS:
-				if (DO_NAWS) {
-					DO_NAWS = false;
-				} else {
-					DO_NAWS = true;
-				}
-				break;
-			case TTYPE:
-				if (DO_TTYPE) {
-					DO_TTYPE = false;
-				} else {
-					DO_TTYPE = true;
-					getTTYPE();
-				}
-				break;
-			case LINEMODE:
-				if (DO_LINEMODE) {
-					DO_LINEMODE = false;
-					//set false in connection data, so the application knows.
-					connectionData.setLineMode(false);
-				} else {
-					DO_LINEMODE = true;
-					negotiateLineMode();
-				}
-				break;
-			case NEWENV:
-				if (DO_NEWENV) {
-					DO_NEWENV = false;
-				} else {
-					DO_NEWENV = true;
-					negotiateEnvironment();
-				}
-				break;
+				case SUPGA:
+					if (DO_SUPGA) {
+						DO_SUPGA = false;
+					} else {
+						DO_SUPGA = true;
+					}
+					break;
+				case ECHO:
+					if (DO_ECHO) {
+						DO_ECHO = false;
+					} else {
+						DO_ECHO = true;
+					}
+					break;
+				case NAWS:
+					if (DO_NAWS) {
+						DO_NAWS = false;
+					} else {
+						DO_NAWS = true;
+					}
+					break;
+				case TTYPE:
+					if (DO_TTYPE) {
+						DO_TTYPE = false;
+					} else {
+						DO_TTYPE = true;
+						getTTYPE();
+					}
+					break;
+				case LINEMODE:
+					if (DO_LINEMODE) {
+						DO_LINEMODE = false;
+						//set false in connection data, so the application knows.
+						connectionData.setLineMode(false);
+					} else {
+						DO_LINEMODE = true;
+						negotiateLineMode();
+					}
+					break;
+				case NEWENV:
+					if (DO_NEWENV) {
+						DO_NEWENV = false;
+					} else {
+						DO_NEWENV = true;
+						negotiateEnvironment();
+					}
+					break;
 			}
 		}//enable
 
@@ -1360,20 +1345,20 @@ public class TelnetIO {
 		 */
 		private boolean isEnabled(int i) {
 			switch (i) {
-			case SUPGA:
-				return DO_SUPGA;
-			case ECHO:
-				return DO_ECHO;
-			case NAWS:
-				return DO_NAWS;
-			case TTYPE:
-				return DO_TTYPE;
-			case LINEMODE:
-				return DO_LINEMODE;
-			case NEWENV:
-				return DO_NEWENV;
-			default:
-				return false;
+				case SUPGA:
+					return DO_SUPGA;
+				case ECHO:
+					return DO_ECHO;
+				case NAWS:
+					return DO_NAWS;
+				case TTYPE:
+					return DO_TTYPE;
+				case LINEMODE:
+					return DO_LINEMODE;
+				case NEWENV:
+					return DO_NEWENV;
+				default:
+					return false;
 			}
 		}//isEnabled
 
@@ -1387,16 +1372,16 @@ public class TelnetIO {
 		 */
 		private boolean waitWILLreply(int i) {
 			switch (i) {
-			case SUPGA:
-				return WAIT_WILL_REPLY_SUPGA;
-			case ECHO:
-				return WAIT_WILL_REPLY_ECHO;
-			case NAWS:
-				return WAIT_WILL_REPLY_NAWS;
-			case TTYPE:
-				return WAIT_WILL_REPLY_TTYPE;
-			default:
-				return false;
+				case SUPGA:
+					return WAIT_WILL_REPLY_SUPGA;
+				case ECHO:
+					return WAIT_WILL_REPLY_ECHO;
+				case NAWS:
+					return WAIT_WILL_REPLY_NAWS;
+				case TTYPE:
+					return WAIT_WILL_REPLY_TTYPE;
+				default:
+					return false;
 			}
 		}//waitWILLreply
 
@@ -1409,20 +1394,20 @@ public class TelnetIO {
 		 */
 		private boolean waitDOreply(int i) {
 			switch (i) {
-			case SUPGA:
-				return WAIT_DO_REPLY_SUPGA;
-			case ECHO:
-				return WAIT_DO_REPLY_ECHO;
-			case NAWS:
-				return WAIT_DO_REPLY_NAWS;
-			case TTYPE:
-				return WAIT_DO_REPLY_TTYPE;
-			case LINEMODE:
-				return WAIT_DO_REPLY_LINEMODE;
-			case NEWENV:
-				return WAIT_DO_REPLY_NEWENV;
-			default:
-				return false;
+				case SUPGA:
+					return WAIT_DO_REPLY_SUPGA;
+				case ECHO:
+					return WAIT_DO_REPLY_ECHO;
+				case NAWS:
+					return WAIT_DO_REPLY_NAWS;
+				case TTYPE:
+					return WAIT_DO_REPLY_TTYPE;
+				case LINEMODE:
+					return WAIT_DO_REPLY_LINEMODE;
+				case NEWENV:
+					return WAIT_DO_REPLY_NEWENV;
+				default:
+					return false;
 			}
 		}//waitDOreply
 
@@ -1441,44 +1426,44 @@ public class TelnetIO {
 		 */
 		private void setWait(int WHAT, int OPTION, boolean WAIT) {
 			switch (WHAT) {
-			case DO:
-				switch (OPTION) {
-				case SUPGA:
-					WAIT_DO_REPLY_SUPGA = WAIT;
+				case DO:
+					switch (OPTION) {
+						case SUPGA:
+							WAIT_DO_REPLY_SUPGA = WAIT;
+							break;
+						case ECHO:
+							WAIT_DO_REPLY_ECHO = WAIT;
+							break;
+						case NAWS:
+							WAIT_DO_REPLY_NAWS = WAIT;
+							break;
+						case TTYPE:
+							WAIT_DO_REPLY_TTYPE = WAIT;
+							break;
+						case LINEMODE:
+							WAIT_DO_REPLY_LINEMODE = WAIT;
+							break;
+						case NEWENV:
+							WAIT_DO_REPLY_NEWENV = WAIT;
+							break;
+					}
 					break;
-				case ECHO:
-					WAIT_DO_REPLY_ECHO = WAIT;
+				case WILL:
+					switch (OPTION) {
+						case SUPGA:
+							WAIT_WILL_REPLY_SUPGA = WAIT;
+							break;
+						case ECHO:
+							WAIT_WILL_REPLY_ECHO = WAIT;
+							break;
+						case NAWS:
+							WAIT_WILL_REPLY_NAWS = WAIT;
+							break;
+						case TTYPE:
+							WAIT_WILL_REPLY_TTYPE = WAIT;
+							break;
+					}
 					break;
-				case NAWS:
-					WAIT_DO_REPLY_NAWS = WAIT;
-					break;
-				case TTYPE:
-					WAIT_DO_REPLY_TTYPE = WAIT;
-					break;
-				case LINEMODE:
-					WAIT_DO_REPLY_LINEMODE = WAIT;
-					break;
-				case NEWENV:
-					WAIT_DO_REPLY_NEWENV = WAIT;
-					break;
-				}
-				break;
-			case WILL:
-				switch (OPTION) {
-				case SUPGA:
-					WAIT_WILL_REPLY_SUPGA = WAIT;
-					break;
-				case ECHO:
-					WAIT_WILL_REPLY_ECHO = WAIT;
-					break;
-				case NAWS:
-					WAIT_WILL_REPLY_NAWS = WAIT;
-					break;
-				case TTYPE:
-					WAIT_WILL_REPLY_TTYPE = WAIT;
-					break;
-				}
-				break;
 			}
 		}//setWait
 
