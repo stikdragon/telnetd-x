@@ -544,6 +544,7 @@ public class TerminalIO implements BasicTerminalIO {
 	 *
 	 * @return Object that implements Terminal
 	 */
+	@Override
 	public Terminal getTerminal() {
 		return terminal;
 	}//getTerminal

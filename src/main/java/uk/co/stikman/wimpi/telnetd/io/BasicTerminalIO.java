@@ -33,6 +33,8 @@ package uk.co.stikman.wimpi.telnetd.io;
 
 import java.io.IOException;
 
+import uk.co.stikman.wimpi.telnetd.io.terminal.Terminal;
+
 /**
  * Interface that represents the supported terminal oriented low-level I/O
  * capabilities.
@@ -491,5 +493,11 @@ public interface BasicTerminalIO {
 	void setForegroundColor(Color col) throws IOException;
 
 	void setBackgroundColor(Color col) throws IOException;
+
+	/**
+	 * Gets the {@link Terminal} instance associated with this IO
+	 * @return
+	 */
+	Terminal getTerminal();
 
 }//interface BasicTerminalIO

@@ -38,18 +38,21 @@ package uk.co.stikman.wimpi.telnetd.io.terminal;
  * and does the job without sophisticated parsing routines. It should therefore
  * perform quite fast.
  *
+ * Stik: I've removed the singleton, there's literally no point to it here,
+ * patterns for the sake of patterns!
+ *
  * @author Dieter Wimberger
  * @version 2.0 (16/07/2006)
  */
 public final class Colorizer {
 
-	private static Colorizer	SELF;			//Singleton instance reference
-	private int[]				colorMapping;	//translation table
+	private int[]	colorMapping;		//translation table
+	private boolean	autoReset	= true;	// when true any call to colourize will automatically reset attributes afterwards
 
 	/**
 	 * Constructs a Colorizer with its translation table.
 	 */
-	private Colorizer() {
+	public Colorizer() {
 
 		colorMapping = new int[128];
 
@@ -82,7 +85,6 @@ public final class Colorizer {
 		colorMapping[104] = h;
 		colorMapping[97] = a;
 
-		SELF = this;
 	}//constructor
 
 	/**
@@ -145,12 +147,11 @@ public final class Colorizer {
 		}
 
 		/*
-		 * This will always add a "reset all" escape sequence
-		 * behind the input string.
-		 * Basically this is a good idea, because developers tend to
+		 * This will always add a "reset all" escape sequence behind the input
+		 * string. Basically this is a good idea, because developers tend to
 		 * forget writing colored strings properly.
 		 */
-		if (support)
+		if (support && autoReset)
 			out.append(addEscapeSequence("a", false));
 
 		return out.toString();
@@ -176,19 +177,6 @@ public final class Colorizer {
 
 		return tmpbuf.toString();
 	}//addEscapeSequence
-
-	/**
-	 * Returns the reference of the Singleton instance.
-	 *
-	 * @return reference to Colorizer singleton instance.
-	 */
-	public static Colorizer getReference() {
-		if (SELF != null) {
-			return SELF;
-		} else {
-			return new Colorizer();
-		}
-	}//getReference
 
 	/**
 	 * Test Harness *
@@ -229,7 +217,7 @@ public final class Colorizer {
 	public static void main(String[] args) {
 		try {
 			announceTest("Instantiation");
-			myColorizer = Colorizer.getReference();
+			myColorizer = new Colorizer();
 			announceResult(true);
 
 			announceTest("Textcolor Tests");
@@ -330,16 +318,38 @@ public final class Colorizer {
 	private static final int	W	= 37;	//white
 	private static final int	w	= 47;
 
-	private static final int	f	= 1;	/*bold*/
+	private static final int	f	= 1;	/* bold */
 
-	private static final int	d	= 22;	/*!bold*/ //normal color or normal intensity
-	private static final int	i	= 3;	/*italic*/
-	private static final int	j	= 23;	/*!italic*/
-	private static final int	u	= 4;	/*underlined*/
-	private static final int	v	= 24;	/*!underlined*/
-	private static final int	e	= 5;	/*blink*/
-	private static final int	n	= 25;	/*steady = !blink*/
-	private static final int	h	= 8;	/*hide = concealed characters*/
-	private static final int	a	= 0;	/*all out*/
+	private static final int	d	= 22;	/* !bold */ //normal color or normal intensity
+	private static final int	i	= 3;	/* italic */
+	private static final int	j	= 23;	/* !italic */
+	private static final int	u	= 4;	/* underlined */
+	private static final int	v	= 24;	/* !underlined */
+	private static final int	e	= 5;	/* blink */
+	private static final int	n	= 25;	/* steady = !blink */
+	private static final int	h	= 8;	/* hide = concealed characters */
+	private static final int	a	= 0;	/* all out */
+
+	/**
+	 * <p>
+	 * When <code>true</code> will automatically reset all attributes after
+	 * calling {@link #colorize(String, boolean)}. It's safer, but also kind of
+	 * annoying if you're actually trying to achieve something.
+	 * <p>
+	 * Defaults to <code>true</code> for backward-compat
+	 * 
+	 * @return
+	 */
+	public boolean isAutoReset() {
+		return autoReset;
+	}
+
+	/**
+	 * @see #isAutoReset()
+	 * @param autoReset
+	 */
+	public void setAutoReset(boolean autoReset) {
+		this.autoReset = autoReset;
+	}
 
 }//class Colorizer

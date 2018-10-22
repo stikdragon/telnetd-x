@@ -1,9 +1,9 @@
 <project default="jar" xmlns:ivy="antlib:org.apache.ivy.ant">
 
-	<property name="version" value="0.2" />	
+	<property name="version" value="0.3" />	
 
 	<target name="clean">
-		<delete dir="build" />
+		<delete dir="build/classes" />
 		<delete dir="lib/ivy" />
 		<mkdir dir="lib/ivy" />
 	</target>

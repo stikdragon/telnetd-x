@@ -373,6 +373,7 @@ public interface Terminal {
    */
   public static final byte LE = 75; 	// K...line erase actions related
   public static final byte SE = 74;  	// J...screen erase actions related
+Colorizer getColorizer();
 
 
 }//interface Terminal
